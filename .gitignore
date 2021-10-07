@@ -2,6 +2,11 @@
 .Rhistory
 .Rapp.history
 
+# Test scripts and simulation results
+./output/
+./outputGraphics/
+test.r
+
 # Session Data files
 .RData
 
@@ -16,6 +21,7 @@
 
 # RStudio files
 .Rproj.user/
+*.Rproj
 
 # produced vignettes
 vignettes/*.html
