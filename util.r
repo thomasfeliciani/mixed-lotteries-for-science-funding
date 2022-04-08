@@ -28,7 +28,7 @@ runType0 <- function(p, NtoBeFunded, ...) {
 # Type 1 _______________________________________________________________________
 # Type 1 means that a lottery is used to break any tie for the last fundable
 # position(s) in the panel ranking.
-runType1 <- function(p, NtoBeFunded, weights = NA, ...) {
+runType1 <- function(p, NtoBeFunded, w = NULL, ...) {
   
   # Using the "ceiling" ranking allows me to exclude from the panel choice 
   # any tie that might arise for the last fundable position(s).
@@ -48,12 +48,12 @@ runType1 <- function(p, NtoBeFunded, weights = NA, ...) {
     # Drawing winners from the pool.
     # We declare probability weights so that, unless specified otherwise, the
     # sampling will be from a uniform distribution.
-    if (is.na(weights)) weights <- rep(1, times = nrow(p))
+    if (is.null(w)) w <- rep(1, times = length(pool))
     lotteryWinners <- sample(
       x = pool,
       size = NtoBeDrawn,
       replace = FALSE,
-      prob = weights
+      prob = w
     )
     p$lotteryChoice[lotteryWinners] <- TRUE
   }
@@ -73,7 +73,7 @@ runType1 <- function(p, NtoBeFunded, weights = NA, ...) {
 # (we assume they'll choose those they liked the most), but some winners will
 # have to be chosen by lot from among the ones deemed to be "fundable".
 #
-runType2 <- function(p, NtoBeFunded, NtoBeDrawn, weights = NA, ...) {
+runType2 <- function(p, NtoBeFunded, NtoBeDrawn, w = NULL, ...) {
   
   # Using the "ceiling" ranking allows me to exclude from the panel choice 
   # any tie that might arise for the last fundable position(s).
@@ -96,14 +96,27 @@ runType2 <- function(p, NtoBeFunded, NtoBeDrawn, weights = NA, ...) {
   # Drawing winners from the pool.
   # We declare probability weights so that, unless specified otherwise, the
   # sampling will be from a uniform distribution.
-  if (is.na(weights)) weights <- rep(1, times = nrow(p))
-  lotteryWinners <- sample(
-    x = pool,
-    size = NtoBeDrawn,
-    replace = FALSE,
-    prob = weights
-  )
-  p$lotteryChoice[lotteryWinners] <- TRUE
+  if (length(pool) > 0) { # If there are eligible proposals in the pool:
+    
+    if (length(pool) == 1) {
+      lotteryWinners <- pool
+    } else {
+      if (is.null(w)) w <- rep(1, times = length(pool))
+      
+      lotteryWinners <- sample(
+        x = pool,
+        size = min(NtoBeDrawn, length(pool)),
+        replace = FALSE,
+        prob = w
+      )
+    }
+    
+    p$lotteryChoice[lotteryWinners] <- TRUE
+  } else { # Else, if there aren't ...
+    p$lotteryChoice <- FALSE
+  }
+  
+  
   
   # Funded proposals are those chosen by the panel, plus those that won the
   # lottery:
@@ -117,7 +130,7 @@ runType2 <- function(p, NtoBeFunded, NtoBeDrawn, weights = NA, ...) {
 # Type 3 _______________________________________________________________________
 # These are lotteries of all sufficiently meritorious proposals.
 #
-runType3 <- function(p, NtoBeFunded, weights = NA, ...) {
+runType3 <- function(p, NtoBeFunded, w = NULL, ...) {
   
   # The lottery pool includes all proposals that received a sufficiently
   # high grade, i.e. the ones that are sufficiently meritorious:
@@ -127,12 +140,12 @@ runType3 <- function(p, NtoBeFunded, weights = NA, ...) {
   # Drawing winners from the pool.
   # We declare probability weights so that, unless specified otherwise, the
   # sampling will be from a uniform distribution.
-  if (is.na(weights)) weights <- rep(1, times = nrow(p))
+  if (is.null(w)) w <- rep(1, times = length(pool))
   lotteryWinners <- sample(
     x = pool,
-    size = NtoBeFunded, ##
+    size = min(NtoBeFunded, length(pool)),
     replace = FALSE,
-    prob = weights
+    prob = w
   )
   p$lotteryChoice[lotteryWinners] <- TRUE
   p$funded[lotteryWinners] <- TRUE
@@ -146,7 +159,7 @@ runType3 <- function(p, NtoBeFunded, weights = NA, ...) {
 # A lottery of this type is a lottery of all proposals -- no evaluation by the
 # panel comes into play, not even in determining the lottery pool.
 #
-runType4 <- function(p, NtoBeFunded, weights = NA, ...) {
+runType4 <- function(p, NtoBeFunded, w = NULL, ...) {
   
   # All proposals are in the lottery pool:
   p$lotteryPool <- TRUE
@@ -154,12 +167,12 @@ runType4 <- function(p, NtoBeFunded, weights = NA, ...) {
   # Drawing winners.
   # We declare probability weights so that, unless specified otherwise, the
   # sampling will be from a uniform distribution.
-  if (is.na(weights)) weights <- rep(1, times = nrow(p))
+  if (is.null(w)) w <- rep(1, times = nrow(p))
   lotteryWinners <- sample(
     x = 1:nrow(p),
     size = NtoBeFunded, ##
     replace = FALSE,
-    prob = weights
+    prob = w
   )
   p$lotteryChoice[lotteryWinners] <- TRUE
   p$funded[lotteryWinners] <- TRUE
@@ -193,10 +206,10 @@ gini = function (x) { # adapted from ineq::Gini
 truncate <- function(x, min = 0, max = 1){
   if (length(x) > 1) return(sapply(x, truncate, min = min, max = max))
   ifelse(
-    x < min,
+    x <= min,
     return(min),
     ifelse(
-      x > max,
+      x >= max,
       return(max),
       return(x)
     )
