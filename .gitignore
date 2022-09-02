@@ -3,8 +3,8 @@
 .Rapp.history
 
 # Test scripts and simulation results
-./output/
-./outputGraphics/
+./output/*
+./outputGraphics/*
 test.r
 
 # Session Data files
