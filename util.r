@@ -12,11 +12,42 @@
 # Type 0 _______________________________________________________________________
 # Type 0 lotteries actually involve no lottery at all: funding is entirely
 # determined by the panel ranking. If there are ties for the last funded
-# position, we assume the panel will recommend all tying proposals for
-# funding. (Note: this means that the number of proposals recommended for
-# funding can sometimes exceed the target funding rate).
-runType0 <- function(p, NtoBeFunded, ...) {
+# position, then the panel re-examines the proposals in the tie at the funding
+# line, and breaks the tie(s) based on their re-examination.
+runType0 <- function(p, NtoBeFunded, panelError, panelBias, ...) {
   winners <- p$panelRank_floor <= NtoBeFunded
+  
+  # If there are ties, then some potential winners need to be discarded.
+  # To do that, we first try to break that tie by examining the tieing proposals
+  # closer.
+  if (sum(winners) > NtoBeFunded) {
+    
+    # Proposals with a ranking position above the funding line and thus not in 
+    # the tie:
+    abovetie <- which(p$panelRank_floor < max(p$panelRank_floor[winners]))
+    # Proposals in the ranking that tie for the funding line:
+    tie <- which(p$panelRank_floor == max(p$panelRank_floor[winners]))
+    
+    # Re-examining those proposals.
+    reevaluation <- p$refEval[tie] + # Reference evaluation by the panel
+      rnorm(n = length(tie), mean = 0, sd = panelError) + # plus random error
+      (p$attrUncorr[tie] * panelBias)# plus bias
+    
+    # Updating the winners:
+    reevaluatedWinners <- rep(FALSE, times = nrow(p))
+    
+    # The winners in a Type 0 systems are the proposals that...
+    reevaluatedWinners[c(
+      # ... have received an evaluation above the tie ...
+      abovetie,
+      #... and, those in the tie that were reevaluated more favorably:
+      tie[order(reevaluation, decreasing=T)[1:(NtoBeFunded - length(abovetie))]]
+    )] <- TRUE
+    
+    winners <- reevaluatedWinners
+  }
+  
+  # Updating wins records in the proposals dataframe "p":
   p$won <- p$won + winners # adding to the winners' tally of total wins
   p$panelChoice <- winners
   p$funded <- winners
@@ -30,7 +61,7 @@ runType0 <- function(p, NtoBeFunded, ...) {
 # position(s) in the panel ranking.
 runType1 <- function(p, NtoBeFunded, w = NULL, ...) {
   
-  # Using the "ceiling" ranking allows me to exclude from the panel choice 
+  # Using the "ceiling" ranking allows us to exclude from the panel choice 
   # any tie that might arise for the last fundable position(s).
   p$panelChoice <- p$panelRank_ceil <= NtoBeFunded
   
@@ -49,6 +80,8 @@ runType1 <- function(p, NtoBeFunded, w = NULL, ...) {
     # We declare probability weights so that, unless specified otherwise, the
     # sampling will be from a uniform distribution.
     if (is.null(w)) w <- rep(1, times = length(pool))
+    
+    # And then we determine the tie-breaking lottery winners:
     lotteryWinners <- sample(
       x = pool,
       size = NtoBeDrawn,
@@ -75,16 +108,12 @@ runType1 <- function(p, NtoBeFunded, w = NULL, ...) {
 #
 runType2 <- function(p, NtoBeFunded, NtoBeDrawn, w = NULL, ...) {
   
-  # Using the "ceiling" ranking allows me to exclude from the panel choice 
+  # Using the "ceiling" ranking allows us to exclude from the panel choice 
   # any tie that might arise for the last fundable position(s).
-  # Note that if there are ties that make it impossible for the panel to
-  # choose their bypass quota, then the panel will choose none.
-  p$panelChoice <- p$panelRank_ceil <= NtoBeFunded - NtoBeDrawn
-  
-  # In the event the panel didn't choose their bypass quota, we must update
-  # the number of porposals to be chosen by lot:
-  NtoBeDrawn <- NtoBeFunded - sum(p$panelChoice)
-  
+  # Note that there might be ties that make it difficult for the panel to choose
+  # their quota. We assume here that the panel will make an arbitrary decision
+  # as to how to break that tie.
+  p$panelChoice <- p$panelRank_strict <= NtoBeFunded - NtoBeDrawn
   
   # Then we define the lottery pool. It should include:
   pool <- which(
