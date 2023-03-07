@@ -231,7 +231,7 @@ parameterSpace <- expand.grid(
   #lotteryChoiceRate = c(0.25, 0.5, 0.75),
   scaleGranularity = c(3, 5, 10),
   nReviewers = c(3, 5, 7),
-  panelBias = c(0.2, 0.5),
+  panelBiassufficientMerit = c(0.2, 0.5),
   repeatLottery = 100
 )
 
