@@ -1,11 +1,8 @@
 # This script contains all support functions for the simulation.
-#
-#
-
 
 ################################################################################
 ################################################################################
-# Lottery types
+# Types of selection procedures
 
 
 
@@ -31,7 +28,7 @@ runType0 <- function(p, NtoBeFunded, panelError, panelBias, ...) {
     # Re-examining those proposals.
     reevaluation <- p$refEval[tie] + # Reference evaluation by the panel
       rnorm(n = length(tie), mean = 0, sd = panelError) + # plus random error
-      (p$attrUncorr[tie] * panelBias)# plus bias
+      (p$attrUncorr[tie] * panelBias)# plus bias (b)
     
     # Updating the winners:
     reevaluatedWinners <- rep(FALSE, times = nrow(p))

@@ -1,3 +1,6 @@
+# This script loads the simulation results produced by "simulation.r" and
+# produces the figures shown in the article.
+
 rm(list = ls())
 
 library("plyr")
@@ -9,11 +12,8 @@ extension = "tiff" # "png" or "tiff"
 ################################################################################
 ################################################################################
 ################################################################################
-################################################################################
-################################################################################
-################################################################################
-################################################################################
-# Determining the range of values of G explored in the simulation
+# Determining the range of values of G explored in the simulation.
+# This is used to fill in Table A.1. from the Supplementary Information.
 
 # (G is the granularity of the typical panel ranking, aka tiering).
 d <- expand.grid(gamma = c(3, 5, 10), R = c(3, 5, 7))
@@ -23,18 +23,10 @@ for (i in 1:nrow(d)) d$G[i] <- d$gamma[i] * d$R[i] - (d$R[i] - 1)
 d$G[order(d$G)]
 
 
-
-
-
-
-
-################################################################################
-################################################################################
 ################################################################################
 ################################################################################
 ################################################################################
 # Loading and preparing simulation results
-
 load("./output/results.RData")
 
 # recoding, reshaping and relabeling:
@@ -47,8 +39,8 @@ r$type[r$type == "type 3"] <- "Type 3"
 r$type[r$type == "type 4"] <- "Type 4"
 
 # reverse coding these two variables - so that high values mean 'fairer'
-r$bias <- 1 - abs(r$bias) ####################
-r$inequality <- 1 - r$inequality #############
+r$bias <- 1 - abs(r$bias)
+r$inequality <- 1 - r$inequality
 
 r <- reshape2::melt(
   data = r,
@@ -64,14 +56,7 @@ r$variable <- plyr::revalue(
   )
 )
 
-
-# Renaming variable labels
-#r$variable <- as.character(r$variable)
-#r$variable[r$variable == "merit"] <- "merit\n(correlation with\nreference evaluation)"
-#r$variable[r$variable == "bias"] <- "bias\n(correlation with\nunimportant attribute)"
-#r$variable[r$variable == "inequality"] <- "inequality\n(Gini index)\n"
-
-# Adding a color variable
+# Adding a color variable so we can color the boxplots by Type.
 r$color <- 2
 r$color[r$type == "Type 0"] <- 0
 r$color[r$type == "Type 1"] <- 1
@@ -104,11 +89,6 @@ plotResults <- function (rr) {
     scale_y_discrete(limits = rev) +
     scale_fill_viridis_d(option = "B", begin = 0.25, end = 0.92) +
     xlab("low \U2194 high") +
-    #xlab(paste0(
-    #  "correlation with reference evaluation", "                 ",
-    #  "   1 - |corr. with attribute that should not matter|", "             ",
-    #  "1 - Gini index"
-    #)) +
     theme(
       plot.background = element_rect(fill = "white", color = NA),
       panel.background = element_rect(fill = "gray97"),
@@ -116,10 +96,8 @@ plotResults <- function (rr) {
       strip.text.x = element_text(size = 12),
       axis.line = element_line(color = "black", size = 1),
       axis.text.y = element_text(size = 12),
-      #axis.title = element_blank(),
       axis.title.y = element_blank(),
-      #axis.title.x = element_text(size = 7, hjust = 0.1),
-      axis.title.x = element_text(size = 10, hjust = 0.5, vjust = -0.5), #######
+      axis.title.x = element_text(size = 10, hjust = 0.5, vjust = -0.5),
       strip.background = element_blank(),
       legend.position = "NA"
     )# |> print()
@@ -199,15 +177,15 @@ plotResults(rr)
 dev.off()
 
 
-# stronger bias ________________________________________________________________
+# higher panel granularity _____________________________________________________
 rr <- subset(
   r,
   r$targetFundingRate == 0.5 & # c(0.25, 0.5, 0.75)
     r$sufficientMerit == 0.5 & # c(0.25, 0.5, 0.75)
     #r$lotteryChoiceRate == 0.5 & # c(0.25, 0.5, 0.75)
-    r$scaleGranularity == 5 & # c(3, 5, 10)
-    r$nReviewers == 5 & # c(3, 5, 7)
-    r$panelBias == 0.5 # c(0.2, 0.5)
+    r$scaleGranularity == 10 & # c(3, 5, 10)
+    r$nReviewers == 7 & # c(3, 5, 7)
+    r$panelBias == 0.2
 )
 
 do.call(
@@ -220,15 +198,15 @@ plotResults(rr)
 dev.off()
 
 
-# higher panel granularity _____________________________________________________
+# stronger bias ________________________________________________________________
 rr <- subset(
   r,
   r$targetFundingRate == 0.5 & # c(0.25, 0.5, 0.75)
     r$sufficientMerit == 0.5 & # c(0.25, 0.5, 0.75)
     #r$lotteryChoiceRate == 0.5 & # c(0.25, 0.5, 0.75)
-    r$scaleGranularity == 10 & # c(3, 5, 10)
-    r$nReviewers == 7 & # c(3, 5, 7)
-    r$panelBias == 0.2
+    r$scaleGranularity == 5 & # c(3, 5, 10)
+    r$nReviewers == 5 & # c(3, 5, 7)
+    r$panelBias == 0.5 # c(0.2, 0.5)
 )
 
 do.call(

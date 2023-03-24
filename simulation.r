@@ -1,8 +1,14 @@
-# Runs on R 4.1.2
+# The first part of this script defines the function to run a Monte Carlo
+# simulation experiment.
+# The second part runs the simulation experiment exploring a specified parameter
+# space.
 
+# Runs on R 4.2.2.
+
+################################################################################
+# Cleaning environment and loading resources
 rm(list = ls())
-source("util.r")
-library("faux")
+source("util.r") # This script contains some of the core functions we need
 library("compiler")
 
 debug = FALSE
@@ -10,17 +16,18 @@ debug = FALSE
 ################################################################################
 ##  Simulation  ################################################################
 ################################################################################
-
+# Here we define the function "run" which executes one model simulation under
+# the specified conditions (model parameters are passed to "run" as function
+# arguments).
 run <- function(
-  nProposals = 100,
-  targetFundingRate = 0.5,
-  sufficientMerit = 0.6,
-  #lotteryChoiceRate = c(0.5, 0.1), # Lottery size in Type 2 lotteries
-  scaleGranularity = 5,
-  nReviewers = 2,
-  panelError = 0.1,
-  panelBias = 0.1, # influence of unrelated attribute on panel evaluation
-  repeatLottery = 100,
+  nProposals = 100,        # parameter N
+  targetFundingRate = 0.5, # parameter T
+  sufficientMerit = 0.6,   # parameter θ ("sufficiency bar")
+  scaleGranularity = 5,    # parameter γ (number of available grades)
+  nReviewers = 2,          # parameter R (number of reviewers)
+  panelError = 0.1,        # parameter σ_ε (size of evaluation errors)
+  panelBias = 0.1,         # parameter λ (size of evaluation bias)
+  repeatLottery = 100,     # how many repetitions over the same set of proposals
   seed = NULL
 ) {
   
@@ -28,16 +35,20 @@ run <- function(
   if(is.null(seed)) seed <- sample(-999999999:999999999, size = 1)
   set.seed(seed)
   
-  # Initializing proposals
+  # Initializing proposals.
+  # Note that we draw the reference evaluation
   p <- data.frame(
-    won = rep(0, times = nProposals), # tally of awards
+    # initializing the variable where we'll store the tally of awards:
+    won = rep(0, times = nProposals),
+    
+    # reference evaluation:
     refEval = rbeta(n = nProposals, shape1 = 10, shape2 = 3),
-    attrUncorr = runif(n = nProposals, min = 0, max = 1)
+    
+    # a random error term that we'll use to simulate biased evaluations by the 
+    # typical panel (denoted "b" in the article).
+    attrUncorr = runif(n = nProposals, min = 0, max = 1) # random term "b"
   )
-  
-  p$attrCorrPos <- faux::rnorm_pre(x = p$refEval, r = 0.5, empirical = TRUE)
-  #p$attrCorrNeg <- faux::rnorm_pre(x = p$refEval, r = 0.5, empirical = TRUE)
-  #p$attrCorrNeg <- abs(p$attrCorrNeg - max(p$attrCorrNeg))
+  #p$attrCorrPos <- faux::rnorm_pre(x = p$refEval, r = 0.5, empirical = TRUE)
   
   # Inizialiting vectors where we'll store the outcomes of each proposal:
   p0won <- p1won <- p2_10won <- p2_50won <- p2_90won <- p3won <- p4won <- 
@@ -116,7 +127,10 @@ run <- function(
     #NtoBeDrawn <- round(NtoBeFunded * lotteryChoiceRate)
     
     
-    # Now running the actually lottery:
+    # Now running the actually selection procedures.
+    # Note that we run p2_* (i.e. Type 2) three times (i.e. p2_10won, p2_50won, 
+    # p2_90won). This hardcodes the parameter *S* (the "lottery choice rate"),
+    # which only pertains to Type 2 partial lotteries with bypass.
     p0won <- p0won + runType0(p, NtoBeFunded, panelError, panelBias)$funded
     p1won <- p1won + runType1(p, NtoBeFunded, w = NULL)$funded
     p2_10won <- p2_10won + runType2(
@@ -163,19 +177,24 @@ run <- function(
   for (typ in 1:length(types)) {
     if(length(unique(eval(parse(text = paste0("p", types[typ], "won"))))) > 1) {
       
+      # This is merit fairness:
       results$merit[typ] <- cor(
         x = p$refEval,
         y = eval(parse(text = paste0("p", types[typ], "won"))), # wins
         method = "spearman"
       )
       
+      # This is for calculating unbiased fairness.
+      # Later we'll calculate 1 - abs(results$bias).
       results$bias[typ] <- cor(
         x = p$attrUncorr,
         y = eval(parse(text = paste0("p", types[typ], "won"))), # wins
         method = "spearman"
       )
     }
-
+    
+    # This is used for calculating distributive fairness.
+    # Later we'll take 1 - results$inequality.
     results$inequality[typ] <- gini(
       eval(parse(text = paste0("p", types[typ], "won")))
     )
@@ -188,30 +207,21 @@ run <- function(
 ################################################################################
 ##  Usage  #####################################################################
 ################################################################################
-if (FALSE) {
+# This part of the script illustrates how to run a simulation.
+# We put it all inside a "if(FALSE)" statement. This prevents this block of code
+# from being executed when sourcing this script.
+
+if (FALSE) { #
   x <- run(
     nProposals = 100,
     targetFundingRate = 0.5,
     sufficientMerit = 0.6,
-    #lotteryChoiceRate = 0.3,
     scaleGranularity = 5,
     nReviewers = 2,
-    panelBias = 0.3, # influence of unrelated attribute on panel evaluation
+    panelBias = 0.3,
     repeatLottery = 100,
     seed = NULL
   )
-  
-  # For debugging:
-  #
-  nProposals = 100
-  targetFundingRate = 0.75
-  sufficientMerit = 0.5
-  #lotteryChoiceRate = 0.25
-  scaleGranularity = 3
-  nReviewers = 3
-  panelBias = 0.5
-  repeatLottery = 100
-  seed = 200357346
 }
 
 
@@ -220,23 +230,33 @@ if (FALSE) {
 ################################################################################
 ##  Battery  ###################################################################
 ################################################################################
+# This part of the script replicates the simulation experiment by running the
+# model 100 times for each unique parameter configuration.
 
+# Ensuring that we have a ./output/ directory where to store the results:
 if (!dir.exists("./output/")) dir.create("./output/")
 
-nRepetitions = 100 ##############
+nRepetitions = 100 # how many runs per condition (default is 100)
 
+# Creating a full factorial design:
 parameterSpace <- expand.grid(
-  targetFundingRate = c(0.25, 0.5, 0.75),
-  sufficientMerit = c(0.25, 0.5, 0.75),
-  #lotteryChoiceRate = c(0.25, 0.5, 0.75),
-  scaleGranularity = c(3, 5, 10),
-  nReviewers = c(3, 5, 7),
-  panelBiassufficientMerit = c(0.2, 0.5),
+  targetFundingRate = c(0.25, 0.5, 0.75), # parameter T
+  sufficientMerit = c(0.25, 0.5, 0.75), # parameter θ
+  scaleGranularity = c(3, 5, 10), # parameter γ
+  nReviewers = c(3, 5, 7), # parameter R
+  panelBias = c(0.2, 0.5), # parameter λ
   repeatLottery = 100
 )
 
+######################################################################
+# And now we run the simulation battery. This may take several hours.
+
+# printing a progress bar in console:
 pb <- txtProgressBar(min = 0, max = nRepetitions, style = 3)
 
+# Compiling functions to speed up things a bit.
+# We could use parallelization to improve performance dramatically. I didn't 
+# because CPU time was still manageable without parallelization.
 enableJIT(1)
 for (rep in 1:nRepetitions) { # For N repetitions...
   
@@ -245,19 +265,18 @@ for (rep in 1:nRepetitions) { # For N repetitions...
     # ... we define the parameter configuration ...
     parameters <- list(
       nProposals = 100,
-      targetFundingRate = parameterSpace$targetFundingRate[bat],
-      sufficientMerit = parameterSpace$sufficientMerit[bat],
-      #lotteryChoiceRate = parameterSpace$lotteryChoiceRate[bat],
-      scaleGranularity = parameterSpace$scaleGranularity[bat],
-      nReviewers = parameterSpace$nReviewers[bat],
-      panelBias = parameterSpace$panelBias[bat],
+      targetFundingRate = parameterSpace$targetFundingRate[bat], # parameter T
+      sufficientMerit = parameterSpace$sufficientMerit[bat], # parameter θ
+      scaleGranularity = parameterSpace$scaleGranularity[bat], # parameter γ
+      nReviewers = parameterSpace$nReviewers[bat], # parameter R
+      panelBias = parameterSpace$panelBias[bat], # parameter λ
       repeatLottery = parameterSpace$repeatLottery[bat],
       seed = sample(-999999999:999999999, size = 1)
     )
     if(debug) print(parameters)
     
-    # ... run the simulation ...
-    results <- do.call(run, parameters)#run(parameters)
+    # ... run the simulation with the right parameter configuration ...
+    results <- do.call(run, parameters)
     
     # ... and append the results to a dataframe:
     ifelse(
@@ -267,10 +286,11 @@ for (rep in 1:nRepetitions) { # For N repetitions...
     )
   }
   
-  
+  # Updating the progress bar at the end of each repetition
   setTxtProgressBar(pb, rep)
 }
 close(pb)
 enableJIT(0)
 
+# Saving the output.
 save(r, file = "./output/results.RData")
