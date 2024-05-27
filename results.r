@@ -6,6 +6,10 @@ rm(list = ls())
 library("plyr")
 library("reshape2")
 library("ggplot2")
+library("ggtern")
+library("ggalt")
+
+source("./util.r")
 
 extension = "tiff" # "png" or "tiff"
 
@@ -42,6 +46,12 @@ r$type[r$type == "type 4"] <- "Type 4"
 r$bias <- 1 - abs(r$bias)
 r$inequality <- 1 - r$inequality
 
+# This format of "r" is convenient for generating the ternary plot later. So we
+# put aside a copy of it.
+rtri <- r
+
+# And we format "r" to make it easier to generate the traditional violins and
+# boxplots.
 r <- reshape2::melt(
   data = r,
   id.vars = names(r)[! names(r) %in% c("merit", "bias", "inequality")]
@@ -50,7 +60,7 @@ r <- reshape2::melt(
 r$variable <- plyr::revalue(
   r$variable,
   c(
-    "merit" = "merit fairness",
+    "merit" = "epistemic correctness",
     "bias" = "unbiased fairness",
     "inequality" = "distributive fairness"
   )
@@ -74,12 +84,12 @@ plotResults <- function (rr) {
         type = rep("Type 0", times = 6),
         color = rep(NA, times = 6),
         variable = as.factor(c(
-          "merit fairness", "merit fairness",
+          "epistemic correctness", "epistemic correctness",
           "unbiased fairness", "unbiased fairness",
           "distributive fairness", "distributive fairness"
         )),
         value = c( # min and max of each variable/facet
-          min(r$value[r$variable == "merit fairness"]), 1, # merit
+          min(r$value[r$variable == "epistemic correctness"]), 1, # merit
           0, 1,                                            # unbiased
           min(r$value[r$variable == "distributive fairness"]), 1 # distributive
         )
@@ -100,7 +110,7 @@ plotResults <- function (rr) {
       axis.title.x = element_text(size = 10, hjust = 0.5, vjust = -0.5),
       strip.background = element_blank(),
       legend.position = "NA"
-    )# |> print()
+    )
 }
 #plotResults(rr)
 
@@ -170,7 +180,7 @@ rr <- subset(
 do.call(
   extension,
   args = list(
-    filename = paste0("./outputGraphics/fig_3.", extension),
+    filename = paste0("./outputGraphics/fig_4.", extension),
     width = 2300, height = 1000, unit = "px", res = 300, bg = "transparent")
 )
 plotResults(rr)
@@ -191,7 +201,7 @@ rr <- subset(
 do.call(
   extension,
   args = list(
-    filename = paste0("./outputGraphics/fig_4.", extension),
+    filename = paste0("./outputGraphics/fig_5.", extension),
     width = 2300, height = 1000, unit = "px", res = 300, bg = "transparent")
 )
 plotResults(rr)
@@ -212,7 +222,7 @@ rr <- subset(
 do.call(
   extension,
   args = list(
-    filename = paste0("./outputGraphics/fig_5.", extension),
+    filename = paste0("./outputGraphics/fig_6.", extension),
     width = 2300, height = 1000, unit = "px", res = 300, bg = "transparent")
 )
 plotResults(rr)
@@ -234,8 +244,201 @@ rr <- subset(
 do.call(
   extension,
   args = list(
-    filename = paste0("./outputGraphics/fig_6.", extension),
+    filename = paste0("./outputGraphics/fig_7.", extension),
     width = 2300, height = 1000, unit = "px", res = 300, bg = "transparent")
 )
 plotResults(rr)
+dev.off()
+
+
+# Ternary plot _________________________________________________________________
+#
+# Selecting benchmark runs (same as Figure 1):
+rrtri <- subset(
+  rtri,
+  rtri$targetFundingRate == 0.5 & # c(0.25, 0.5, 0.75)
+    rtri$sufficientMerit == 0.5 & # c(0.25, 0.5, 0.75)
+    #r$lotteryChoiceRate == 0.5 & # c(0.25, 0.5, 0.75)
+    rtri$scaleGranularity == 5 & # c(3, 5, 10)
+    rtri$nReviewers == 5 & # c(3, 5, 7)
+    rtri$panelBias == 0.2 # c(0.2, 0.5)
+)
+
+# Transforming performance scores into orderings.
+rrtri$EpistemicCorrectnessRank <- rank(
+  normalize(rrtri$merit), # mapping "merit" to positive range via normalization
+  ties.method = "average"
+)
+rrtri$unbiasedFairnessRank <- rank(rrtri$bias, ties.method = "average")
+rrtri$distributiveFairnessRank <- rank(
+  rrtri$inequality,
+  ties.method = "average"
+)
+
+# Adding a color variable so we can color the boxplots by Type.
+rrtri$color <- 2
+rrtri$color[rrtri$type == "Type 0"] <- 0
+rrtri$color[rrtri$type == "Type 1"] <- 1
+rrtri$color[rrtri$type == "Type 3"] <- 3
+rrtri$color[rrtri$type == "Type 4"] <- 4
+rrtri$color <- factor(
+  x = rrtri$color,
+  levels = 0:4,
+  labels = c(paste("Type", 0:4))
+)
+
+# Producing the ternary plot
+do.call(
+  extension,
+  args = list(
+    filename = paste0("./outputGraphics/ternary_plot.", extension),
+    width = 2300, height = 2000, unit = "px", res = 300, bg = "transparent")
+)
+ggtern::ggtern(
+  data = rrtri,
+  aes(
+    x = EpistemicCorrectnessRank, 
+    y = unbiasedFairnessRank, 
+    z = distributiveFairnessRank,
+    fill = color,
+    color = color#type
+  )
+) + 
+  labs(
+    x = "more\nepistemic\ncorrectness",# xarrow = "epistemic correctness",
+    y = "more\nunbiased fairness",# yarrow = "unbiased fairness",
+    z = "more\ndistributive\nfairness"#, zarrow = "distributive fairness"
+  ) +
+  ggalt::geom_encircle( # adds the convex hulls
+    alpha = 0.2,
+    expand = 0.05#,
+    #show.legend = FALSE
+  ) +
+  geom_point(shape = 16, alpha = 0.6) +
+  scale_color_viridis_d(option = "B", begin = 0.25, end = 0.92) +
+  scale_fill_viridis_d(option = "B", begin = 0.25, end = 0.92) +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "gray97"),
+    panel.grid = element_line(color = "gray80"),
+    legend.title = element_blank(),
+    legend.position = c(0.9, 0.5)
+  ) + 
+  theme_nolabels() + 
+  theme_hideprimary()
+dev.off()
+
+
+################################################################################
+# convex-hull plots
+
+rrtri <- subset(
+  rtri,
+  rtri$targetFundingRate == 0.5 & # c(0.25, 0.5, 0.75)
+    rtri$sufficientMerit == 0.5 & # c(0.25, 0.5, 0.75)
+    #r$lotteryChoiceRate == 0.5 & # c(0.25, 0.5, 0.75)
+    rtri$scaleGranularity == 5 & # c(3, 5, 10)
+    rtri$nReviewers == 5 & # c(3, 5, 7)
+    rtri$panelBias == 0.2 # c(0.2, 0.5)
+)
+
+# Transforming performance scores into orderings.
+rrtri$EpistemicCorrectnessRank <- rank(
+  normalize(rrtri$merit), # mapping "merit" to positive range via normalization
+  ties.method = "average"
+)
+rrtri$unbiasedFairnessRank <- rank(rrtri$bias, ties.method = "average")
+rrtri$distributiveFairnessRank <- rank(
+  rrtri$inequality,
+  ties.method = "average"
+)
+
+# Adding a color variable so we can color the boxplots by Type.
+rrtri$color <- 2
+rrtri$color[rrtri$type == "Type 0"] <- 0
+rrtri$color[rrtri$type == "Type 1"] <- 1
+rrtri$color[rrtri$type == "Type 3"] <- 3
+rrtri$color[rrtri$type == "Type 4"] <- 4
+rrtri$color <- factor(
+  x = rrtri$color,
+  levels = 0:4,
+  labels = c(paste("Type", 0:4))
+)
+
+
+themebiplot <- theme (
+  plot.background = element_rect(fill = "white", color = NA),
+  panel.background = element_rect(fill = "gray97"),
+  panel.grid = element_blank(),
+  axis.line = element_line(color = "black", size = 1),
+  axis.ticks = element_blank(),
+  axis.title.y = element_text(size = 12, hjust = 0.5, vjust = -5),
+  axis.title.x = element_text(size = 12, hjust = 0.5, vjust = 5),
+  legend.title = element_blank(),
+  legend.justification = "top"
+)
+#arrow <- grDevices::italic("lower \U2194 higher")
+
+a <- ggplot(
+  data = rrtri,
+  aes(
+    x = EpistemicCorrectnessRank, 
+    y = unbiasedFairnessRank, 
+    color = color, fill = color
+  )
+) +
+  ggalt::geom_encircle(alpha = 0.2, expand = 0.05) + # adds the convex hulls
+  geom_point(shape = 16, alpha = 0.6) +
+  scale_x_continuous(
+    expand = c(0.01, 0.01),
+    breaks = range(rrtri$EpistemicCorrectnessRank),
+    labels = c("worst        ", "best")
+  ) +
+  scale_y_continuous(
+    expand = c(0.01, 0.01),
+    breaks = max(rrtri$unbiasedFairnessRank),#range(rrtri$unbiasedFairnessRank),
+    labels = "best"#c("worst", "best")
+  ) +
+  scale_color_viridis_d(option = "B", begin = 0.25, end = 0.92) +
+  scale_fill_viridis_d(option = "B", begin = 0.25, end = 0.92) +
+  labs(x = "epistemic correctness", y = "unbiased fairness") +
+  themebiplot
+
+b <- ggplot(
+  data = rrtri,
+  aes(
+    x = EpistemicCorrectnessRank, 
+    y = distributiveFairnessRank, 
+    color = color, fill = color
+  )
+) +
+  ggalt::geom_encircle(alpha = 0.2, expand = 0.05) + # adds the convex hulls
+  geom_point(shape = 16, alpha = 0.6) +
+  scale_x_continuous(
+    expand = c(0.01, 0.01),
+    breaks = range(rrtri$EpistemicCorrectnessRank),
+    labels = c("worst        ", "best")
+  ) +
+  scale_y_continuous(
+    expand = c(0.01, 0.01),
+    breaks = max(rrtri$distributiveFairnessRank),
+    labels = "best"#c("worst", "best")
+  ) +
+  scale_color_viridis_d(option = "B", begin = 0.25, end = 0.92) +
+  scale_fill_viridis_d(option = "B", begin = 0.25, end = 0.92) +
+  labs(x = "epistemic correctness", y = "distributive fairness") +
+  themebiplot
+
+do.call(
+  extension,
+  args = list(
+    filename = paste0("./outputGraphics/fig_3.", extension),
+    width = 2300, height = 1000, unit = "px", res = 300, bg = "white")
+)
+ggpubr::ggarrange(
+  a, b,
+  align = "hv",
+  common.legend = TRUE,
+  legend = "right"
+)
 dev.off()
