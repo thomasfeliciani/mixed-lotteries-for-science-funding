@@ -1,9 +1,9 @@
-**Last update**: 24 March 2023 by Thomas
+**Last update**: 27 May 2024 by Thomas
 
 
 This folder contains the replication scripts for an article on funding lotteries currently under review.
 
-These scripts run in R 4.2.2 and rely on some external libraries specified below (and also listed at the top of each script). The scripts are:
+These scripts run in R 4.3.2 and rely on some external libraries specified below (and also listed at the top of each script). The scripts are:
 
 ## util.r
 Here we defined the fundamental functions necessary to run the simulation model -- most notably, *util.r* contains the implementation of the various Types of selection procedure.
